@@ -1,8 +1,7 @@
-campaign/places/Ulhanham.txt
-campaign/places/Myangan_Mountains.txt
-campaign/places/Kiraitai.txt
+campaign/*
 test.py
 prompt.txt
 promptExemples.txt
 generationExemples.txt
 CampaignMaker.txt
+.env

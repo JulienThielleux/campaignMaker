@@ -1,5 +1,9 @@
 from termcolor import colored
 import tiktoken
+import configparser
+import os
+import json
+
 
 def pretty_print_conversation(messages):
     role_to_color = {
@@ -22,36 +26,17 @@ def pretty_print_conversation(messages):
             print(colored(f"function ({message['name']}): {message['content']}\n", role_to_color[message["role"]]))
 
 
-def num_tokens_from_messages(messages, model="gpt-3.5-turbo-0613"):
+def num_tokens_from_messages(messages, model):
     """Return the number of tokens used by a list of messages."""
     try:
         encoding = tiktoken.encoding_for_model(model)
     except KeyError:
         print("Warning: model not found. Using cl100k_base encoding.")
         encoding = tiktoken.get_encoding("cl100k_base")
-    if model in {
-        "gpt-3.5-turbo-0613",
-        "gpt-3.5-turbo-16k-0613",
-        "gpt-4-0314",
-        "gpt-4-32k-0314",
-        "gpt-4-0613",
-        "gpt-4-32k-0613",
-        }:
-        tokens_per_message = 3
-        tokens_per_name = 1
-    elif model == "gpt-3.5-turbo-0301":
-        tokens_per_message = 4  # every message follows <|start|>{role/name}\n{content}<|end|>\n
-        tokens_per_name = -1  # if there's a name, the role is omitted
-    elif "gpt-3.5-turbo" in model:
-        print("Warning: gpt-3.5-turbo may update over time. Returning num tokens assuming gpt-3.5-turbo-0613.")
-        return num_tokens_from_messages(messages, model="gpt-3.5-turbo-0613")
-    elif "gpt-4" in model:
-        print("Warning: gpt-4 may update over time. Returning num tokens assuming gpt-4-0613.")
-        return num_tokens_from_messages(messages, model="gpt-4-0613")
-    else:
-        raise NotImplementedError(
-            f"""num_tokens_from_messages() is not implemented for model {model}. See https://github.com/openai/openai-python/blob/main/chatml.md for information on how messages are converted to tokens."""
-        )
+
+    tokens_per_message = 3
+    tokens_per_name = 1
+
     num_tokens = 0
     for message in messages:
         num_tokens += tokens_per_message
@@ -61,3 +46,55 @@ def num_tokens_from_messages(messages, model="gpt-3.5-turbo-0613"):
                 num_tokens += tokens_per_name
     num_tokens += 3  # every reply is primed with <|start|>assistant<|message|>
     return num_tokens
+
+def prune_messages(messages):
+    # Remove all function messages
+    if messages[len(messages)-1]["role"] == "function":
+            del messages[i] 
+    # Remove the last message that is not a system message
+    for i in range(len(messages) - 1, -1, -1):
+        if messages[i]["role"] != "system":
+            del messages[i]
+            break 
+
+def list_places():
+    places = {}
+
+    for root, dirs, files in os.walk('campaign/places'):
+        for file in files:
+            if file.endswith('.txt'):
+                file_path = os.path.join(root, file)
+                with open(file_path, 'r') as file:
+                    json_content = json.load(file)
+                    name = json_content['name']
+                    full_content = json.dumps(json_content)
+                    places[name] = full_content
+
+    return places
+
+def findExistingPlace(userQuery, places):
+    existingPlaceContext = []
+    for place in places:
+        if place.lower() in userQuery.lower():
+            existingPlaceContext.append(places[place])
+            print(place, places[place])
+            
+    return existingPlaceContext
+
+def addPlaceToModifyToContext(userQuery, existingPlaceContext):
+    updatedUserQuery = userQuery + '\n' + 'to_modify' + '\n'
+    for context in existingPlaceContext:
+        updatedUserQuery += f'{context}\n'
+    return updatedUserQuery
+
+def addUpperRegionToContext(userQuery, existingPlaceContext):
+    updatedUserQuery = userQuery + '\n' + 'information on the region in which the place must be created' + '\n'
+    for context in existingPlaceContext:
+        updatedUserQuery += f'{context}\n'
+    return updatedUserQuery
+
+# Load properties from prompt.ini
+def get_properties():
+    config = configparser.ConfigParser()
+    config.read('prompt.ini')
+    return config
