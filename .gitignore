@@ -5,3 +5,7 @@ promptExemples.txt
 generationExemples.txt
 CampaignMaker.txt
 .env
+__pycache__/custom_tools.cpython-310.pyc
+__pycache__/Models.cpython-310.pyc
+__pycache__/utils.cpython-310.pyc
+.gitignore

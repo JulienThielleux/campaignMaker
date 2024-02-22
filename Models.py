@@ -27,14 +27,15 @@ def chat_completion_request(client, messages, tools=None, tool_choice=None):
 
     model = "gpt-3.5-turbo-0613"
 
-    """
     # Count the tokens of the conversation
-    tokenNumber = 5000
-    while tokenNumber > 4096:
+    tokenNumber = utils.num_tokens_from_messages(messages, model)
+    print(f"Number of tokens: {tokenNumber}")
+    while tokenNumber > 2000:
         # Pruning the conversation
+        print("Pruning the conversation")
         messages = utils.prune_messages(messages)
         tokenNumber = utils.num_tokens_from_messages(messages, model)
-    """
+        print(f"Number of tokens: {tokenNumber}")
 
     try:
         response = client.chat.completions.create(
@@ -68,7 +69,12 @@ def call_dispatch_model(userQuery, clients, messages):
 
     return messages
 
-def call_create_place_model(userQuery, placeCreateClient):
+def call_create_place_model(content, placeCreateClient):
+
+    # Extract userQuery and upperRegion from content
+    data = eval(content)
+    userQuery = data.get("userQuery")
+    upperRegion = data.get("upperRegion")
 
     print("create_place function")
 
@@ -81,7 +87,8 @@ def call_create_place_model(userQuery, placeCreateClient):
             {"role": "system", "content": createPlaceSystemPrompt}
         ]
     
-    upperRegion = input("Does this new place need to exist in an existing region (which one) ? : ")
+    if upperRegion is None:
+        upperRegion = input("Does this new place need to exist in an existing region (which one) ? : ")
 
     # List all the places
     places = utils.list_places()
@@ -104,20 +111,22 @@ def call_create_place_model(userQuery, placeCreateClient):
     while True:
         # Call OpenAI API
         response = chat_completion_request(
-            #placeCreateClient, messages, tools=custom_tools, tool_choice='auto'
-            placeCreateClient, messages
+            placeCreateClient, messages, tools=custom_tools, tool_choice={"type": "function", "function": {"name": "write_place"}}
         )
     
         # Handle the response
         handleAssistantResponse(response, messages, placeCreateClient)
     
         # Print conversation so far
-        utils.pretty_print_conversation(messages)
+        utils.pretty_print_conversation(messages,"default")
 
         # Ask for user input in place creation
         userQuery = input("You: ")
         if userQuery == 'quit':
             print("place creation exited")
+            break
+        elif userQuery == 'save':
+            userQuery = utils.saveCurrentPlace(messages)
             break
 
         # Add user query to messages
@@ -125,7 +134,12 @@ def call_create_place_model(userQuery, placeCreateClient):
 
     return "create_place function"
 
-def call_modify_place_model(userQuery, placeModifyClient):
+def call_modify_place_model(content, placeModifyClient):
+
+    # Extract userQuery and upperRegion from content
+    data = eval(content)
+    userQuery = data.get("userQuery")
+    to_modify = data.get("to_modify")
 
     print("modify_place function")
     
@@ -142,7 +156,7 @@ def call_modify_place_model(userQuery, placeModifyClient):
     places = utils.list_places()
 
     # Search refered place in all places
-    existingPlaces = utils.findExistingPlace(userQuery, places)
+    existingPlaces = utils.findExistingPlace(to_modify, places)
 
     # Add the existing place context to the user query
     if existingPlaces:
@@ -159,20 +173,22 @@ def call_modify_place_model(userQuery, placeModifyClient):
 
         # Call OpenAI API
         response = chat_completion_request(
-            #placeModifyClient, messages, tools=custom_tools, tool_choice='auto'
-            placeModifyClient, messages
+            placeModifyClient, messages, tools=custom_tools, tool_choice={"type": "function", "function": {"name": "write_place"}}
         )
     
         # Handle the response
         handleAssistantResponse(response, messages, placeModifyClient)
     
         # Print conversation so far
-        utils.pretty_print_conversation(messages)
+        utils.pretty_print_conversation(messages,"default")
 
         # Ask for user input in place modification
         userQuery = input("You: ")
         if userQuery == 'quit':
             print("place modification exited")
+            break
+        elif userQuery == 'save':
+            userQuery = utils.saveCurrentPlace(messages)
             break
 
         # Add user query to messages
@@ -180,19 +196,21 @@ def call_modify_place_model(userQuery, placeModifyClient):
 
     return "modify_place function"
 
-def call_create_character_model(content, characterCreateClient):
-    
+def call_create_character_model(userQuery, characterCreateClient):
+
+    print("create_character function")
+
     # Load properties from prompt.ini
     config = utils.get_properties()
-    
+
     # Write the system prompt for character creation
     createCharacterSystemPrompt = config.get('section2','system.prompt.character.creation')
     messages=[
             {"role": "system", "content": createCharacterSystemPrompt}
         ]
-    
+
     # Add user query to messages
-    messages.append({"role": "user", "content": content})
+    messages.append({"role": "user", "content": userQuery})
 
     # Set up custom tools
     custom_tools = ct.set_character_creation_custom_tools()
@@ -201,18 +219,22 @@ def call_create_character_model(content, characterCreateClient):
     while True:
         # Call OpenAI API
         response = chat_completion_request(
-            characterCreateClient, messages, tools=custom_tools, tool_choice='auto'
+            characterCreateClient, messages, tools=custom_tools, tool_choice={"type": "function", "function": {"name": "write_character"}}
         )
     
         # Handle the response
         handleAssistantResponse(response, messages, characterCreateClient)
     
         # Print conversation so far
-        utils.pretty_print_conversation(messages)
+        utils.pretty_print_conversation(messages,"default")
 
         # Ask for user input in character creation
         userQuery = input("You: ")
         if userQuery == 'quit':
+            print("character creation exited")
+            break
+        elif userQuery == 'save':
+            userQuery = utils.saveCurrentCharacter(messages)
             print("character creation exited")
             break
 
@@ -223,17 +245,34 @@ def call_create_character_model(content, characterCreateClient):
 
 def call_modify_character_model(content, characterModifyClient):
     
+    print("modify_character function")
+
+    # Extract userQuery and to_modify from content
+    data = eval(content)
+    userQuery = data.get("userQuery")
+    to_modify = data.get("to_modify")
+
     # Load properties from prompt.ini
     config = utils.get_properties()
-    
+
     # Write the system prompt for character modification
     modifyCharacterSystemPrompt = config.get('section2','system.prompt.character.modification')
     messages=[
             {"role": "system", "content": modifyCharacterSystemPrompt}
         ]
     
+    # List all the characters
+    characters = utils.list_characters()
+
+    # Search refered character in all characters
+    existingCharacters = utils.findExistingCharacter(to_modify, characters)
+
+    # Add the existing character context to the user query
+    if existingCharacters:
+        userQuery = utils.addCharacterToModifyToContext(userQuery, existingCharacters)
+    
     # Add user query to messages
-    messages.append({"role": "user", "content": content})
+    messages.append({"role": "user", "content": userQuery})
 
     # Set up custom tools
     custom_tools = ct.set_character_modification_custom_tools()
@@ -242,18 +281,22 @@ def call_modify_character_model(content, characterModifyClient):
     while True:
         # Call OpenAI API
         response = chat_completion_request(
-            characterModifyClient, messages, tools=custom_tools, tool_choice='auto'
+            characterModifyClient, messages, tools=custom_tools, tool_choice={"type": "function", "function": {"name": "write_character"}}
         )
     
         # Handle the response
         handleAssistantResponse(response, messages, characterModifyClient)
     
         # Print conversation so far
-        utils.pretty_print_conversation(messages)
+        utils.pretty_print_conversation(messages,"default")
 
         # Ask for user input in character modification
         userQuery = input("You: ")
         if userQuery == 'quit':
+            print("character modification exited")
+            break
+        elif userQuery == 'save':
+            userQuery = utils.saveCurrentCharacter(messages)
             print("character modification exited")
             break
 
@@ -261,6 +304,7 @@ def call_modify_character_model(content, characterModifyClient):
         messages.append({"role": "user", "content": userQuery})
 
     return "modify_character function"
+
 
 def call_create_other_model():
     print("create_other function")

@@ -6,8 +6,10 @@ def execute_function_call(message,client):
     arguments = message.tool_calls[0].function.arguments
 
     match function_name:
-        case "save_place":
-            results = save_place(arguments)
+        case "write_place":
+            results = write_place(arguments)
+        case "write_character":
+            results = write_character(arguments)
         case "create_place":
             results = create_place(arguments,client)
         case "modify_place":
@@ -26,9 +28,9 @@ def execute_function_call(message,client):
     return results
 
 
-def save_place(content):
+def write_place(content):
     """
-    Saves the newly created place.
+    Use this function each time you have to create or modify a place.
 
     Args:
         name (str): The name of the place.
@@ -38,15 +40,25 @@ def save_place(content):
         population (int): The population of the place.
 
     Returns:
-        str: A success message if the content is successfully saved, or an error message if saving fails.
+        str: The json of the formatted place.
     """
-    name = json.loads(content)['name'].replace(" ", "_")
-    try:
-        with open(f'campaign/places/{name}.txt', 'w') as file:
-            file.write(content)
-        return f"Successfully saved content to campaign/places/{name}.txt"
-    except Exception as e:
-        return f"Failed to save content: {str(e)}"
+    return content
+
+def write_character(content):
+    """
+    Use this function each time you have to create or modify a character.
+
+    Args:
+        name (str): The name of the character.
+        summary (str): A summary of the character.
+        detailed (str): A detailed description of the character.
+        race (str): The race of the character.
+        sex (str): The sex of the character.
+
+    Returns:
+        str: The json of the formatted character.
+    """
+    return content
 
 def create_place(content,client):
     """
@@ -54,6 +66,7 @@ def create_place(content,client):
 
     Args:
         content (str): The user query.
+        upperRegion (str): The region in which the place must be created if the user specified it.
     """
     Models.call_create_place_model(content,client)
     return "create_place function"
@@ -65,6 +78,7 @@ def modify_place(content,client):
 
     Args:
         content (str): The user query.
+        to_modify (str): The name of the region the user asked to modify
     """
     Models.call_modify_place_model(content,client)
     return "modify_place function"
@@ -87,6 +101,7 @@ def modify_character(content,client):
 
     Args:
         content (str): The user query.
+        to_modify (str): The name of the character the user asked to modify
     """
     Models.call_modify_character_model(content,client)
     return "modify_character function"  
@@ -116,12 +131,11 @@ def modify_other(content,client):
 def set_place_creation_custom_tools():
     custom_tools= []
 
-    """
     custom_tools.append(
         {"type": "function",
          "function": {
-             'name': 'save_place',
-             'description': 'Saves the newly created place. Only use when the user asks to save the place.',
+             'name': 'write_place',
+             'description': 'write the place asked by the user.',
              'parameters': {
                  'type': 'object',
                  'properties': {
@@ -151,19 +165,17 @@ def set_place_creation_custom_tools():
          }
          }
     )
-    """
     
     return custom_tools
 
 def set_place_modification_custom_tools():
     custom_tools= []
 
-    """
     custom_tools.append(
         {"type": "function",
          "function": {
-             'name': 'save_place',
-             'description': 'Saves the newly modified place.',
+             'name': 'write_place',
+             'description': 'write the place asked by the user.',
              'parameters': {
                  'type': 'object',
                  'properties': {
@@ -193,25 +205,23 @@ def set_place_modification_custom_tools():
          }
          }
     )
-    """
     
     return custom_tools
 
 def set_character_creation_custom_tools():
     custom_tools= []
 
-    """
     custom_tools.append(
         {"type": "function",
          "function": {
-             'name': 'save_character',
-             'description': 'Saves the newly created character.',
+             'name': 'write_character',
+             'description': 'write the character asked by the user.',
              'parameters': {
                  'type': 'object',
                  'properties': {
                      'name': {
                          'type': 'string',
-                         'description': 'Name of the character'
+                         'description': 'Name of the character, always provide one even if the user did not provide it.'
                      },
                      'summary': {
                          'type': 'string',
@@ -235,19 +245,17 @@ def set_character_creation_custom_tools():
          }
          }
     )
-    """
 
     return custom_tools
 
 def set_character_modification_custom_tools():
     custom_tools= []
 
-    """
     custom_tools.append(
         {"type": "function",
          "function": {
-             'name': 'save_character',
-             'description': 'Saves the newly modified character.',
+             'name': 'write_character',
+             'description': 'write the character asked by the user.',
              'parameters': {
                  'type': 'object',
                  'properties': {
@@ -277,7 +285,6 @@ def set_character_modification_custom_tools():
          }
          }
     )
-    """
 
     return custom_tools
 
@@ -294,10 +301,14 @@ def set_dispatch_custom_tools():
                  'properties': {
                      'userQuery': {
                          'type': 'string',
-                         'description': 'A copy of the user query.'
-                     }
-                 }
-             },
+                         'description': 'An exact copy of the user message.'
+                     },
+                     'upperRegion': {
+                         'type': 'string',
+                         'description': 'The region in which the place must be created if the user specified it.'
+                    }
+                    }
+                    },
              "required": ["userQuery"],
          }
          }
@@ -313,11 +324,15 @@ def set_dispatch_custom_tools():
                  'properties': {
                      'userQuery': {
                          'type': 'string',
-                         'description': 'A copy of the user query.'
-                     }
-                 }
-             },
-             "required": ["userQuery"],
+                         'description': 'An exact copy of the user message.'
+                     },
+                     'to_modify': {
+                         'type': 'string',
+                         'description': 'The name of the place the user asked to modify. Always fill this field.'
+                    }
+                    }
+                    },
+             "required": ["userQuery","to_modify"],
          }
          }
     )
@@ -332,7 +347,7 @@ def set_dispatch_custom_tools():
                  'properties': {
                      'userQuery': {
                          'type': 'string',
-                         'description': 'A copy of the user query.'
+                         'description': 'An exact copy of the user message.'
                      }
                  }
              },
@@ -351,11 +366,15 @@ def set_dispatch_custom_tools():
                  'properties': {
                      'userQuery': {
                          'type': 'string',
-                         'description': 'A copy of the user query.'
-                     }
+                         'description': 'An exact copy of the user message.'
+                     },
+                     'to_modify': {
+                         'type': 'string',
+                         'description': 'The name of the character the user asked to modify. Always fill this field'
+                    }
                  }
              },
-             "required": ["userQuery"],
+             "required": ["userQuery","to_modify"],
          }
          }
     )

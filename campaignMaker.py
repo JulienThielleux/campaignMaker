@@ -15,6 +15,11 @@ def main():
     # Set up OpenAI client
     clients = set_openai_api_clients()
 
+    # Print the welcome message
+    welcomeMessage = config.get('section2','system.prompt.welcome')
+    welcomeMessage = welcomeMessage.replace('\\n', '\n')
+    print(welcomeMessage)
+
     # We setup the first model whose role is to dispatch the user's query to the right tool
     # dispatch prompt
     systemPrompt = config.get('section2','system.prompt.dispatch')
@@ -33,7 +38,7 @@ def main():
         messages = call_dispatch_model(userQuery, clients, messages)
 
         # Print conversation so far
-        utils.pretty_print_conversation(messages)
+        utils.pretty_print_conversation(messages,"default")
 
 
 if __name__ == "__main__":
